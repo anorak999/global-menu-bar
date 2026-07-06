@@ -10,10 +10,7 @@
       <default>8</default>
       <summary>Spacing between menu items in pixels</summary>
       <description>Horizontal spacing between top-level menu items in the panel.</description>
-      <range>
-        <min>0</min>
-        <max>24</max>
-      </range>
+      <range min="0" max="24"/>
     </key>
     <key name="show-status-indicator" type="b">
       <default>true</default>
