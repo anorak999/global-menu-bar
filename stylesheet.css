@@ -1,0 +1,55 @@
+.global-menu-bar-panel-button {
+    padding: 0 8px;
+    min-height: 32px;
+    color: inherit;
+    font-size: 0.9em;
+}
+
+.global-menu-bar-panel-button:hover,
+.global-menu-bar-panel-button:active {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.global-menu-bar-panel-button .menu-label {
+    padding: 0 4px;
+}
+
+.global-menu-bar-panel-button .menu-label:focus {
+    text-decoration: underline;
+}
+
+.global-menu-bar-desktop-label {
+    padding: 0 12px;
+    color: @theme_text_color;
+    font-weight: bold;
+}
+
+.global-menu-bar-status-indicator {
+    padding: 0 12px;
+    color: @theme_text_color;
+    opacity: 0.6;
+}
+
+.global-menu-bar-menu {
+    min-width: 180px;
+}
+
+.global-menu-bar-menu .menu-item {
+    padding: 6px 12px;
+}
+
+.global-menu-bar-menu .menu-item:insensitive {
+    color: @theme_text_color;
+    opacity: 0.4;
+}
+
+.global-menu-bar-separator {
+    margin: 4px 8px;
+}
+
+.global-menu-bar-accelerator {
+    margin-left: 16px;
+    color: @theme_text_color;
+    opacity: 0.6;
+    font-size: 0.85em;
+}
