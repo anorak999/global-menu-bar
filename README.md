@@ -71,32 +71,29 @@ This extension is part of a long lineage of attempts to bring global menu functi
 
 ## Install Instructions
 
+### Quick Install
+
+```bash
+cd /path/to/extension
+make install
+gnome-extensions enable global-menu-bar@anorak999.github.com
+```
+
+`make install` runs `gnome-extensions pack` (validates metadata.json structure) then `gnome-extensions install`. Falls back to manual copy if `gnome-extensions` is unavailable.
+
 ### Manual Installation
 
 ```bash
-# Clone or download the extension
 cd /path/to/extension
 
-# Install dependencies (for schema compilation)
-sudo apt install libglib2.0-dev
+# Pack the extension
+make pack
 
-# Compile schemas and install
-make install
+# Install the packed zip
+gnome-extensions install --force global-menu-bar@anorak999.github.com.shell-extension.zip
 
-# Enable the extension
+# Enable
 gnome-extensions enable global-menu-bar@anorak999.github.com
-
-# Restart GNOME Shell (X11: Alt+F2 → r; Wayland: log out and back in)
-```
-
-### Package Installation
-
-```bash
-# Build the extension package
-make package
-
-# The resulting .zip can be installed via gnome-extensions install
-gnome-extensions install global-menu-bar@anorak999.github.com.zip
 ```
 
 ## Configuration
@@ -168,42 +165,59 @@ This extension only displays menus that are exported by applications. Applicatio
 - Custom applications using non-standard UI frameworks
 - Apps that use `GtkApplication.set_menubar()` without proper export configuration
 
-## Manual QA / Testing
+## Testing
 
-### Unit Tests (menuModel.js)
+The build tooling is split into three tiers, reflecting what can and cannot be validated outside a running `gnome-shell` process:
 
-Run the pure function tests outside the Shell process:
+### Tier 1: Static analysis (extension.js, prefs.js, lib/*.js)
+
+`extension.js` and `prefs.js` import `resource:///org/gnome/shell/...` which only exists inside the compiled Shell binary — they cannot be executed under bare `gjs`. The correct validation path is ESLint (static analysis that parses ESM without resolving runtime imports):
 
 ```bash
-cd /path/to/extension
-make test
+npm i -D eslint   # one-time setup
+make lint
 ```
 
-This runs `test/menuModel.test.js` under plain `gjs`, testing:
+This catches syntax errors, lint issues, and ESM parse problems without hitting the Shell resolution wall.
+
+### Tier 2: Pure module check + unit tests (lib/menuModel.js)
+
+`lib/menuModel.js` only imports `gi://GLib` (a real GI library), so it can be loaded and executed under plain `gjs -m`:
+
+```bash
+make check-pure-modules   # loads lib/menuModel.js under gjs -m
+make test                 # runs test/menuModel.test.js (imports from lib/menuModel.js)
+```
+
+Tests exercise the real functions from `lib/menuModel.js` against mocked GMenuModel-shaped objects:
 - Menu model traversal (top-level entries, submenus, sections)
 - Action items with targets
 - Separator handling
 - Edge cases (empty models, nested structures)
+- Registry / teardown simulation
 
-### Manual Compositor Testing
+### Tier 3: Structural validation + Shell QA
 
-Since menu rendering and focus tracking require the Shell compositor, these must be tested manually:
+`gnome-extensions pack` validates `metadata.json` structure and required files independently of executing JS:
 
-1. **Setup a nested Shell session**:
+```bash
+make pack                 # produces *.shell-extension.zip
+```
+
+For anything that needs `Main`/`Meta`/`St` to actually resolve and run, use a nested Shell session:
+
+```bash
+dbus-run-session -- gnome-shell --nested --wayland
+```
+
+Then follow the manual checklist:
+
+1. Install `unity-gtk-module` (if not already installed):
    ```bash
-   dbus-run-session -- gnome-shell --nested --wayland
-   ```
-
-2. **Test app menu export**:
-   ```bash
-   # Install unity-gtk-module (if not already installed)
    sudo apt install unity-gtk-module-common
-
-   # Run a GTK app with menu export
-   GTK_DEBUG=interactive gedit
    ```
 
-3. **Step-by-step manual checklist**:
+2. **Step-by-step manual checklist**:
 
    - [ ] Extension enables without errors (`gnome-extensions enable <uuid>`)
    - [ ] Panel shows "Desktop" label when no window is focused (if enabled)

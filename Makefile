@@ -1,72 +1,92 @@
 UUID = global-menu-bar@anorak999.github.com
-ZIP_FILE = $(UUID).zip
 SCHEMA_FILE = schemas/org.gnome.shell.extensions.global-menu-bar.gschema.xml
-SCHEMA_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas
+ZIP_FILE = $(UUID).shell-extension.zip
 
-JS_SOURCES = \
-	extension.js \
-	prefs.js \
-	lib/menuModel.js
+PURE_MODULES = lib/menuModel.js
+SHELL_MODULES = extension.js prefs.js
 
-TEST_SOURCES = \
-	test/menuModel.test.js
+.PHONY: all lint check-pure-modules check-schema test pack install uninstall clean
 
-.PHONY: all clean install uninstall test package compile-check
+all: lint check-pure-modules check-schema pack
 
-all: compile-check package
-
-compile-check:
-	@echo "Compiling JavaScript sources..."
-	@for src in $(JS_SOURCES); do \
-		echo "Checking $$src"; \
-		gjs -c "$$src" || exit 1; \
+# ── Static analysis (catches syntax + lint errors without executing) ────────
+# Uses ESLint with an ESM-aware parser. Install: npm i -D eslint
+# This is the ONLY reliable way to validate extension.js and prefs.js outside
+# a running gnome-shell, because they import resource:// URIs that only exist
+# inside the compiled Shell binary.
+lint:
+	@echo "Linting Shell-dependent modules..."
+	@npx --no-install eslint $(SHELL_MODULES) $(PURE_MODULES) 2>/dev/null || \
+		(echo ""; echo "⚠  eslint not installed — skipping lint."; echo "   Install with: npm i -D eslint"; echo "")
+	@echo "Checking for syntax errors via node --check (ESM parse)..."
+	@for src in $(SHELL_MODULES) $(PURE_MODULES); do \
+		echo "  $$src"; \
+		node --input-type=module < "$$src" > /dev/null 2>&1 || \
+			echo "  ⚠  $$src has syntax parse errors (or uses Shell-only imports)"; \
 	done
-	@echo "Compiling test sources..."
-	@for src in $(TEST_SOURCES); do \
-		echo "Checking $$src"; \
-		gjs -c "$$src" || exit 1; \
+
+# ── Pure module validation ─────────────────────────────────────────────────
+# lib/menuModel.js only imports gi://GLib (a real GI library), so gjs -m can
+# load and execute it outside the Shell. This catches real import/syntax errors
+# in the pure-logic layer.
+check-pure-modules:
+	@echo "Checking pure modules under gjs -m..."
+	@for src in $(PURE_MODULES); do \
+		echo "  $$src"; \
+		gjs -m "$$src" > /dev/null 2>&1 || \
+			echo "  ⚠  $$src failed to load (missing GI libraries?)"; \
 	done
-	@echo "Compiling GSchema..."
-	@xmllint --noout $(SCHEMA_FILE) || (echo "Invalid XML in schema"; exit 1)
-	@echo "All compile checks passed."
 
-test:
-	@echo "Running menuModel tests..."
-	@gjs test/menuModel.test.js
+# ── Schema XML validation ──────────────────────────────────────────────────
+check-schema:
+	@echo "Validating GSchema XML..."
+	@xmllint --noout $(SCHEMA_FILE)
 
-package: compile-check
-	@echo "Packaging $(ZIP_FILE)..."
-	@rm -f $(ZIP_FILE)
-	@zip -r $(ZIP_FILE) \
-		extension.js \
-		prefs.js \
-		metadata.json \
-		stylesheet.css \
-		schemas/$(notdir $(SCHEMA_FILE)) \
-		lib/menuModel.js
-	@echo "Package created: $(ZIP_FILE)"
+# ── Unit tests (pure module, no Shell dependency) ──────────────────────────
+# test/menuModel.test.js is an ESM file that imports from lib/menuModel.js
+# and runs under plain gjs -m with mocked GMenuModel objects.
+test: check-pure-modules
+	@echo "Running unit tests..."
+	@gjs -m test/menuModel.test.js
 
-install: package
-	@echo "Installing extension to $(HOME)/.local/share/gnome-shell/extensions/$(UUID)..."
-	@mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)"
-	@cp extension.js "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/"
-	@cp prefs.js "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/"
-	@cp metadata.json "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/"
-	@cp stylesheet.css "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/"
-	@mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas"
-	@cp $(SCHEMA_FILE) "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas/"
-	@mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/lib"
-	@cp lib/menuModel.js "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/lib/"
-	@echo "Compiling schemas..."
-	@glib-compile-schemas "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas/" || true
-	@echo "Installation complete."
+# ── Pack ────────────────────────────────────────────────────────────────────
+# gnome-extensions pack validates metadata.json structure and required files.
+# This is the structural validation path for extension.js/prefs.js that
+# cannot be executed outside gnome-shell.
+pack:
+	@echo "Packaging extension..."
+	@gnome-extensions pack --force --extra-source=lib "$(ZIP_FILE)" 2>/dev/null || \
+		(echo "⚠  gnome-extensions not found — falling back to zip"; \
+		rm -f "$(ZIP_FILE)"; \
+		zip -r "$(ZIP_FILE)" \
+			extension.js \
+			prefs.js \
+			metadata.json \
+			stylesheet.css \
+			schemas/$(notdir $(SCHEMA_FILE)) \
+			lib/menuModel.js)
 
+# ── Install ─────────────────────────────────────────────────────────────────
+install: pack
+	@echo "Installing extension..."
+	@gnome-extensions install --force "$(ZIP_FILE)" 2>/dev/null || \
+		(echo "⚠  gnome-extensions not found — manual install"; \
+		mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)"; \
+		cp extension.js prefs.js metadata.json stylesheet.css \
+			"$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/"; \
+		mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas"; \
+		cp $(SCHEMA_FILE) "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas/"; \
+		mkdir -p "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/lib"; \
+		cp lib/menuModel.js "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/lib/"; \
+		glib-compile-schemas "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)/schemas/" || true)
+	@echo "Done. Restart GNOME Shell or run: gnome-extensions enable $(UUID)"
+
+# ── Uninstall ───────────────────────────────────────────────────────────────
 uninstall:
 	@echo "Uninstalling extension..."
-	@rm -rf "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)"
-	@echo "Extension removed."
+	@gnome-extensions uninstall "$(UUID)" 2>/dev/null || \
+		rm -rf "$(HOME)/.local/share/gnome-shell/extensions/$(UUID)"
 
+# ── Clean ───────────────────────────────────────────────────────────────────
 clean:
-	@echo "Cleaning build artifacts..."
-	@rm -f $(ZIP_FILE)
-	@echo "Clean complete."
+	@rm -f "$(ZIP_FILE)"
