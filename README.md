@@ -328,6 +328,6 @@ See [LICENSE](LICENSE) file for full text.
 
 **Email**: himath.hr@gmail.com
 
-**Repository**: [GitHub](https://github.com/anorak999/global-menu-bar)
+**Repository**: [GitHub](https://github.com/Himath-Rajapaksha/global-menu-bar)
 
-**Bug Reports**: [Issues](https://github.com/anorak999/global-menu-bar/issues)
+**Bug Reports**: [Issues](https://github.com/Himath-Rajapaksha/global-menu-bar/issues)

@@ -4,7 +4,7 @@
   "description": "A macOS-style global menu bar for GNOME Shell that strips each app's in-window menu bar and renders it in the persistent top panel, switching contents on window focus change.",
   "version": 1,
   "shell-version": ["46", "47"],
-  "url": "https://github.com/anorak999/global-menu-bar",
+  "url": "https://github.com/Himath-Rajapaksha/global-menu-bar",
   "gettext-domain": "global-menu-bar",
   "settings-schema": "org.gnome.shell.extensions.global-menu-bar",
   "donations": {
